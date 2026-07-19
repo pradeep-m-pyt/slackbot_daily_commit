@@ -20,20 +20,17 @@ async function githubRequest(path) {
   return res.json();
 }
 
-/**
- * Fetches PushEvents for the configured user within the lookback window,
- * including private repo activity (since we're authenticated as that user).
- * Returns a map of { repoName: [commitMessage, ...] }.
- */
 export async function fetchRecentCommits() {
-  const since = Date.now() - config.github.lookbackHours * 60 * 60 * 1000;
+  const sinceMs = Date.now() - config.github.lookbackHours * 60 * 60 * 1000;
+  const sinceIso = new Date(sinceMs).toISOString();
   const { username } = config.github;
 
-  // The events API is paginated; walk pages until events fall outside the window.
   const commitsByRepo = new Map();
+  const targetRepos = new Set();
   let page = 1;
   let keepGoing = true;
 
+  // 1. Identify which repositories have push events in the lookback window
   while (keepGoing && page <= 10) {
     const events = await githubRequest(
       `/users/${username}/events?per_page=100&page=${page}`
@@ -43,27 +40,43 @@ export async function fetchRecentCommits() {
 
     for (const event of events) {
       const eventTime = new Date(event.created_at).getTime();
-      if (eventTime < since) {
+      if (eventTime < sinceMs) {
         keepGoing = false;
         continue;
       }
 
       if (event.type !== "PushEvent") continue;
 
-      const repoName = event.repo?.name || "unknown-repo";
-      const commits = event.payload?.commits || [];
-
-      for (const commit of commits) {
-        // Skip merge commits / noisy auto-messages if desired
-        const message = commit.message?.split("\n")[0]?.trim();
-        if (!message) continue;
-
-        if (!commitsByRepo.has(repoName)) commitsByRepo.set(repoName, []);
-        commitsByRepo.get(repoName).push(message);
+      const repoName = event.repo?.name;
+      if (repoName) {
+        targetRepos.add(repoName);
       }
     }
 
     page += 1;
+  }
+
+  // 2. Fetch actual commits for each repository from the Commits API
+  for (const repoName of targetRepos) {
+    try {
+      const commitsData = await githubRequest(
+        `/repos/${repoName}/commits?since=${sinceIso}&author=${username}`
+      );
+
+      const messages = [];
+      for (const item of commitsData) {
+        const message = item.commit?.message?.split("\n")[0]?.trim();
+        if (message) {
+          messages.push(message);
+        }
+      }
+
+      if (messages.length > 0) {
+        commitsByRepo.set(repoName, messages);
+      }
+    } catch (err) {
+      console.error(`[digest] Failed to fetch commits for ${repoName}:`, err.message);
+    }
   }
 
   return commitsByRepo;
