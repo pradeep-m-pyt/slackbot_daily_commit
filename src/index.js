@@ -1,16 +1,25 @@
 import { config } from "./config.js";
 import { fetchRecentCommits } from "./github.js";
+import { fetchJiraTasks } from "./jira.js";
 import { formatDigest } from "./formatMessage.js";
 import { postDigest } from "./slack.js";
 
 async function main() {
-  console.log(`[digest] Fetching commits for ${config.github.username}...`);
-  const commitsByRepo = await fetchRecentCommits();
+  console.log(`[digest] Fetching data for GitHub (${config.github.username}) and Jira (${config.jira.email})...`);
+  
+  const [commitsByRepo, jiraTasks] = await Promise.all([
+    fetchRecentCommits(),
+    fetchJiraTasks().catch((err) => {
+      console.error("[digest] Warning: Failed to fetch Jira tasks:", err.message);
+      return { completed: [], pending: [] }; // fall back to empty list so GitHub digest still works
+    }),
+  ]);
 
   console.log(
-    `[digest] Found activity in ${commitsByRepo.size} repo(s). Formatting message...`
+    `[digest] GitHub activity in ${commitsByRepo.size} repo(s). Jira tasks: ${jiraTasks.completed.length} completed, ${jiraTasks.pending.length} pending.`
   );
-  const message = formatDigest(commitsByRepo, {
+  
+  const message = formatDigest(commitsByRepo, jiraTasks, {
     lookbackHours: config.github.lookbackHours,
   });
 

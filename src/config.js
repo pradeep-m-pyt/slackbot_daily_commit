@@ -23,4 +23,9 @@ export const config = {
     botToken: required("SLACK_BOT_TOKEN"), // xoxb-...
     channel: required("SLACK_CHANNEL"), // channel ID like C0123ABCD, or #channel-name
   },
+  jira: {
+    host: required("JIRA_HOST"),
+    email: required("JIRA_EMAIL"),
+    token: required("JIRA_API_TOKEN"),
+  },
 };
