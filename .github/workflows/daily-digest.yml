@@ -1,0 +1,28 @@
+name: Daily Commit Digest
+
+on:
+  schedule:
+    # 08:00 IST = 02:30 UTC. GitHub Actions cron is always UTC.
+    - cron: "30 2 * * *"
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab to test
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run digest
+        run: npm start
+        env:
+          GITHUB_USERNAME: ${{ secrets.DIGEST_GH_USERNAME }}
+          GITHUB_TOKEN: ${{ secrets.DIGEST_GH_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}

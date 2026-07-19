@@ -1,0 +1,17 @@
+{
+  "name": "github-slack-digest",
+  "version": "1.0.0",
+  "description": "Fetches your daily GitHub commit activity and posts a formatted digest to Slack.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --env-file=.env src/index.js"
+  },
+  "dependencies": {
+    "@slack/web-api": "^7.7.0"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  }
+}
