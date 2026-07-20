@@ -2,8 +2,8 @@ name: Daily Commit Digest
 
 on:
   schedule:
-    # 08:00 IST = 02:30 UTC. GitHub Actions cron is always UTC.
-    - cron: "30 2 * * *"
+    # 08:08 IST = 02:38 UTC. Avoid peak times (00 and 30) for better reliability.
+    - cron: "38 2 * * *"
   workflow_dispatch: {} # lets you trigger it manually from the Actions tab to test
 
 jobs:
