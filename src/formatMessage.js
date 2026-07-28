@@ -1,7 +1,9 @@
+import { config } from "./config.js";
+
 /**
  * Builds a Slack Block Kit payload from a GitHub commit map and Jira tasks object.
  */
-export function formatDigest(commitsByRepo, jiraTasks, { lookbackHours }) {
+export function formatDigest(commitsByRepo, jiraTasks, commitsByIssue, { lookbackHours }) {
   const totalCommits = [...commitsByRepo.values()].reduce(
     (sum, msgs) => sum + msgs.length,
     0
@@ -21,7 +23,9 @@ export function formatDigest(commitsByRepo, jiraTasks, { lookbackHours }) {
   ];
 
   const githubContext = `*${totalCommits}* commit(s) in *${commitsByRepo.size}* repo(s)`;
-  const jiraContext = `*${jiraTasks.completed.length}* task(s) completed, *${jiraTasks.pending.length}* pending`;
+  const jiraContext = config.jira.enabled
+    ? `*${jiraTasks.completed.length}* task(s) completed, *${jiraTasks.pending.length}* pending`
+    : "Jira integration disabled";
 
   blocks.push({
     type: "context",
@@ -54,7 +58,10 @@ export function formatDigest(commitsByRepo, jiraTasks, { lookbackHours }) {
       const shortRepo = repoName.split("/").pop();
       const bulletList = messages
         .slice(0, 10)
-        .map((m) => `• ${escapeMrkdwn(m)}`)
+        .map((m) => {
+          const escaped = escapeMrkdwn(m);
+          return `• ${linkifyJiraKeys(escaped, config.jira.host)}`;
+        })
         .join("\n");
 
       const overflow =
@@ -70,66 +77,97 @@ export function formatDigest(commitsByRepo, jiraTasks, { lookbackHours }) {
     }
   }
 
-  blocks.push({ type: "divider" });
+  // Only render Jira sections if Jira is configured and enabled
+  if (config.jira.enabled) {
+    blocks.push({ type: "divider" });
 
-  // 2. Jira Completed
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: "✅ *Completed Works (Jira)*" },
-  });
-
-  if (jiraTasks.completed.length === 0) {
+    // 2. Jira Completed
     blocks.push({
       type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `_No tasks completed in the last ${lookbackHours}h._`,
-      },
+      text: { type: "mrkdwn", text: "✅ *Completed Works (Jira)*" },
     });
-  } else {
-    const list = jiraTasks.completed
-      .slice(0, 10)
-      .map((t) => `• *${t.key}*: ${escapeMrkdwn(t.summary)}`)
-      .join("\n");
-    const overflow =
-      jiraTasks.completed.length > 10
-        ? `\n_...and ${jiraTasks.completed.length - 10} more_`
-        : "";
+
+    if (jiraTasks.completed.length === 0) {
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `_No tasks completed in the last ${lookbackHours}h._`,
+        },
+      });
+    } else {
+      const list = jiraTasks.completed
+        .slice(0, 10)
+        .map((t) => {
+          let taskLine = `• *${t.key}*: ${escapeMrkdwn(t.summary)}`;
+          const associatedCommits = commitsByIssue.get(t.key.toUpperCase());
+          if (associatedCommits && associatedCommits.length > 0) {
+            const commitLines = associatedCommits
+              .map((c) => {
+                const escaped = escapeMrkdwn(c);
+                const linkified = linkifyJiraKeys(escaped, config.jira.host);
+                return `  - _${linkified}_`;
+              })
+              .join("\n");
+            taskLine += `\n${commitLines}`;
+          }
+          return taskLine;
+        })
+        .join("\n");
+      const overflow =
+        jiraTasks.completed.length > 10
+          ? `\n_...and ${jiraTasks.completed.length - 10} more_`
+          : "";
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `${list}${overflow}` },
+      });
+    }
+
+    blocks.push({ type: "divider" });
+
+    // 3. Jira Pending
     blocks.push({
       type: "section",
-      text: { type: "mrkdwn", text: `${list}${overflow}` },
+      text: { type: "mrkdwn", text: "⏳ *Pending Works (Jira)*" },
     });
-  }
 
-  blocks.push({ type: "divider" });
-
-  // 3. Jira Pending
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: "⏳ *Pending Works (Jira)*" },
-  });
-
-  if (jiraTasks.pending.length === 0) {
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `_No pending tasks._`,
-      },
-    });
-  } else {
-    const list = jiraTasks.pending
-      .slice(0, 15)
-      .map((t) => `• *${t.key}*: ${escapeMrkdwn(t.summary)}  _[${t.status}]_`)
-      .join("\n");
-    const overflow =
-      jiraTasks.pending.length > 15
-        ? `\n_...and ${jiraTasks.pending.length - 15} more_`
-        : "";
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: `${list}${overflow}` },
-    });
+    if (jiraTasks.pending.length === 0) {
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `_No pending tasks._`,
+        },
+      });
+    } else {
+      const list = jiraTasks.pending
+        .slice(0, 15)
+        .map((t) => {
+          let taskLine = `• *${t.key}*: ${escapeMrkdwn(t.summary)}  _[${t.status}]_`;
+          const associatedCommits = commitsByIssue.get(t.key.toUpperCase());
+          if (associatedCommits && associatedCommits.length > 0) {
+            const commitLines = associatedCommits
+              .map((c) => {
+                const escaped = escapeMrkdwn(c);
+                const linkified = linkifyJiraKeys(escaped, config.jira.host);
+                return `  - _${linkified}_`;
+              })
+              .join("\n");
+            taskLine += `\n${commitLines}`;
+          }
+          return taskLine;
+        })
+        .join("\n");
+      const overflow =
+        jiraTasks.pending.length > 15
+          ? `\n_...and ${jiraTasks.pending.length - 15} more_`
+          : "";
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `${list}${overflow}` },
+      });
+    }
   }
 
   return {
@@ -140,4 +178,10 @@ export function formatDigest(commitsByRepo, jiraTasks, { lookbackHours }) {
 
 function escapeMrkdwn(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function linkifyJiraKeys(text, host) {
+  if (!host) return text;
+  const jiraKeyRegex = /\b([A-Z][A-Z0-9]+-[0-9]+)\b/g;
+  return text.replace(jiraKeyRegex, (match) => `<https://${host}/browse/${match}|${match}>`);
 }

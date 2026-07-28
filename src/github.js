@@ -1,9 +1,10 @@
 import { config } from "./config.js";
+import { fetchWithRetry } from "./http.js";
 
 const GITHUB_API = "https://api.github.com";
 
 async function githubRequest(path) {
-  const res = await fetch(`${GITHUB_API}${path}`, {
+  const res = await fetchWithRetry(`${GITHUB_API}${path}`, {
     headers: {
       Authorization: `Bearer ${config.github.token}`,
       Accept: "application/vnd.github+json",

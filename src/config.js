@@ -13,6 +13,12 @@ function required(name) {
   return value;
 }
 
+const hasJiraConfig = !!(
+  process.env.JIRA_HOST ||
+  process.env.JIRA_EMAIL ||
+  process.env.JIRA_API_TOKEN
+);
+
 export const config = {
   github: {
     username: required("GITHUB_USERNAME"),
@@ -24,8 +30,9 @@ export const config = {
     channel: required("SLACK_CHANNEL"), // channel ID like C0123ABCD, or #channel-name
   },
   jira: {
-    host: required("JIRA_HOST"),
-    email: required("JIRA_EMAIL"),
-    token: required("JIRA_API_TOKEN"),
+    enabled: hasJiraConfig,
+    host: hasJiraConfig ? required("JIRA_HOST") : null,
+    email: hasJiraConfig ? required("JIRA_EMAIL") : null,
+    token: hasJiraConfig ? required("JIRA_API_TOKEN") : null,
   },
 };
