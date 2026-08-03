@@ -28,9 +28,11 @@ async function main() {
   const jiraKeyRegex = /\b([A-Z][A-Z0-9]+-[0-9]+)\b/g;
   const allReferencedKeys = new Set();
 
-  for (const [repoName, messages] of commitsByRepo.entries()) {
+  for (const [repoName, commits] of commitsByRepo.entries()) {
     const shortRepo = repoName.split("/").pop();
-    for (const msg of messages) {
+    for (const item of commits) {
+      const msg = typeof item === "string" ? item : item.message;
+      const shaStr = typeof item === "object" && item.shortSha ? `[\`${item.shortSha}\`] ` : "";
       const matches = msg.match(jiraKeyRegex);
       if (matches) {
         for (const match of matches) {
@@ -39,8 +41,7 @@ async function main() {
           if (!commitsByIssue.has(key)) {
             commitsByIssue.set(key, []);
           }
-          // Store the repo and full commit message under this ticket key
-          commitsByIssue.get(key).push(`${shortRepo}: ${msg}`);
+          commitsByIssue.get(key).push(`${shortRepo}: ${shaStr}${msg}`);
         }
       }
     }

@@ -54,24 +54,32 @@ export function formatDigest(commitsByRepo, jiraTasks, commitsByIssue, { lookbac
       },
     });
   } else {
-    for (const [repoName, messages] of commitsByRepo.entries()) {
+    for (const [repoName, commits] of commitsByRepo.entries()) {
       const shortRepo = repoName.split("/").pop();
-      const bulletList = messages
+      const repoUrl = `https://github.com/${repoName}`;
+      const bulletList = commits
         .slice(0, 10)
-        .map((m) => {
-          const escaped = escapeMrkdwn(m);
-          return `• ${linkifyJiraKeys(escaped, config.jira.host)}`;
+        .map((c) => {
+          if (typeof c === "string") {
+            const escaped = escapeMrkdwn(c);
+            return `• ${linkifyJiraKeys(escaped, config.jira.host)}`;
+          }
+          const escapedMsg = escapeMrkdwn(c.message);
+          const linkifiedMsg = linkifyJiraKeys(escapedMsg, config.jira.host);
+          const shaLink = c.url && c.shortSha ? `<${c.url}|\`${c.shortSha}\`>` : "";
+          const branchBadge = c.branch ? ` _[${escapeMrkdwn(c.branch)}]_` : "";
+          return `• ${shaLink} ${linkifiedMsg}${branchBadge}`.trim();
         })
         .join("\n");
 
       const overflow =
-        messages.length > 10 ? `\n_...and ${messages.length - 10} more_` : "";
+        commits.length > 10 ? `\n_...and ${commits.length - 10} more_` : "";
 
       blocks.push({
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*📁 ${shortRepo}* (${messages.length})\n${bulletList}${overflow}`,
+          text: `*📁 <${repoUrl}|${shortRepo}>* (${commits.length})\n${bulletList}${overflow}`,
         },
       });
     }

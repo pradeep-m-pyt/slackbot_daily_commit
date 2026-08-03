@@ -44,7 +44,8 @@ export async function fetchJiraIssuesByKeys(keys) {
 }
 
 async function queryJira(host, jql, authHeader) {
-  const url = `https://${host}/rest/api/3/search/jql`;
+  const cleanHost = host.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const url = `https://${cleanHost}/rest/api/3/search/jql`;
   
   try {
     const res = await fetchWithRetry(url, {
