@@ -1,23 +1,22 @@
-import { config } from "./config.js";
+import { getUsers } from "./config.js";
 import { fetchRecentCommits } from "./github.js";
 import { fetchJiraTasks, fetchJiraIssuesByKeys } from "./jira.js";
 import { formatDigest } from "./formatMessage.js";
 import { postDigest } from "./slack.js";
 
-async function main() {
-  const jiraEnabled = config.jira.enabled;
-  if (jiraEnabled) {
-    console.log(`[digest] Fetching data for GitHub (${config.github.username}) and Jira (${config.jira.email})...`);
-  } else {
-    console.log(`[digest] Fetching data for GitHub (${config.github.username}) [Jira integration disabled]...`);
-  }
-  
-  // 1. Fetch GitHub and Jira data (Jira only if enabled)
+async function processUserDigest(user) {
+  console.log(`\n------------------------------------------------------------`);
+  console.log(`[digest] Processing digest for ${user.name} (GH: ${user.github.username}, Jira: ${user.jira.email || "disabled"})...`);
+
+  // 1. Fetch GitHub and Jira data for this specific user
   const [commitsByRepo, jiraTasks] = await Promise.all([
-    fetchRecentCommits(),
-    jiraEnabled
-      ? fetchJiraTasks().catch((err) => {
-          console.error("[digest] Warning: Failed to fetch Jira tasks:", err.message);
+    fetchRecentCommits(user.github).catch((err) => {
+      console.error(`[digest] Error fetching GitHub commits for ${user.name}:`, err.message);
+      return new Map();
+    }),
+    user.jira.enabled
+      ? fetchJiraTasks(user.jira).catch((err) => {
+          console.error(`[digest] Warning: Failed to fetch Jira tasks for ${user.name}:`, err.message);
           return { completed: [], pending: [] };
         })
       : Promise.resolve({ completed: [], pending: [] }),
@@ -48,7 +47,7 @@ async function main() {
   }
 
   // 3. Fetch details for missing Jira issues referenced in commits
-  if (jiraEnabled && allReferencedKeys.size > 0) {
+  if (user.jira.enabled && allReferencedKeys.size > 0) {
     const fetchedKeys = new Set([
       ...jiraTasks.completed.map((t) => t.key.toUpperCase()),
       ...jiraTasks.pending.map((t) => t.key.toUpperCase()),
@@ -56,9 +55,9 @@ async function main() {
     const missingKeys = [...allReferencedKeys].filter((key) => !fetchedKeys.has(key));
 
     if (missingKeys.length > 0) {
-      console.log(`[digest] Fetching details for ${missingKeys.length} referenced Jira issue(s) not in default feed...`);
-      const missingIssues = await fetchJiraIssuesByKeys(missingKeys).catch((err) => {
-        console.error("[digest] Warning: Failed to fetch missing Jira issues:", err.message);
+      console.log(`[digest] Fetching details for ${missingKeys.length} referenced Jira issue(s) for ${user.name}...`);
+      const missingIssues = await fetchJiraIssuesByKeys(missingKeys, user.jira).catch((err) => {
+        console.error(`[digest] Warning: Failed to fetch missing Jira issues for ${user.name}:`, err.message);
         return [];
       });
 
@@ -73,22 +72,37 @@ async function main() {
     }
   }
 
+  const totalCommits = [...commitsByRepo.values()].reduce((sum, list) => sum + list.length, 0);
   console.log(
-    `[digest] GitHub activity in ${commitsByRepo.size} repo(s). Jira tasks: ${jiraTasks.completed.length} completed, ${jiraTasks.pending.length} pending.`
+    `[digest] Summary for ${user.name}: ${totalCommits} commit(s) in ${commitsByRepo.size} repo(s). Jira tasks: ${jiraTasks.completed.length} completed, ${jiraTasks.pending.length} pending.`
   );
-  
+
   // 4. Format and post to Slack
   const message = formatDigest(commitsByRepo, jiraTasks, commitsByIssue, {
-    lookbackHours: config.github.lookbackHours,
+    lookbackHours: user.github.lookbackHours,
   });
 
-  console.log(`[digest] Posting to Slack channel ${config.slack.channel}...`);
-  await postDigest(message);
+  console.log(`[digest] Posting digest for ${user.name} to Slack target ${user.slack.channel}...`);
+  await postDigest(user.slack.channel, message, user.slack.botToken);
+  console.log(`[digest] Successfully sent digest for ${user.name}.`);
+}
 
-  console.log("[digest] Done.");
+async function main() {
+  const users = getUsers();
+  console.log(`[digest] Loaded ${users.length} active user configuration(s).`);
+
+  for (const user of users) {
+    try {
+      await processUserDigest(user);
+    } catch (err) {
+      console.error(`[digest] Failed processing digest for ${user.name}:`, err.message);
+    }
+  }
+
+  console.log(`\n[digest] All user digests completed.`);
 }
 
 main().catch((err) => {
-  console.error("[digest] Failed:", err.message);
+  console.error("[digest] Fatal error in main runner:", err.message);
   process.exit(1);
 });

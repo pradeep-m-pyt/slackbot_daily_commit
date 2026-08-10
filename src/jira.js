@@ -5,13 +5,17 @@ import { fetchWithRetry } from "./http.js";
  * Fetches recent completed tasks (last 24 hours) and all pending tasks assigned to the user from Jira.
  * Returns { completed: [{ key, summary, status, statusCategory }], pending: [{ key, summary, status, statusCategory }] }.
  */
-export async function fetchJiraTasks() {
-  const jiraHost = config.jira.host;
-  const email = config.jira.email;
-  const token = config.jira.token;
+export async function fetchJiraTasks(jiraConfig = config.jira) {
+  if (!jiraConfig || !jiraConfig.enabled || !jiraConfig.email || !jiraConfig.token) {
+    return { completed: [], pending: [] };
+  }
+
+  const jiraHost = jiraConfig.host;
+  const email = jiraConfig.email;
+  const token = jiraConfig.token;
 
   const authHeader = `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`;
-  const lookbackHours = config.github.lookbackHours || 24;
+  const lookbackHours = jiraConfig.lookbackHours || 24;
 
   // JQL Queries
   const completedJql = `assignee = currentUser() AND statusCategory = Done AND updated >= -${lookbackHours}h ORDER BY updated DESC`;
@@ -31,12 +35,12 @@ export async function fetchJiraTasks() {
 /**
  * Fetches specific Jira issues by their keys (e.g., TEST-101, PROJ-102) in a single request.
  */
-export async function fetchJiraIssuesByKeys(keys) {
-  if (!keys || keys.length === 0) return [];
+export async function fetchJiraIssuesByKeys(keys, jiraConfig = config.jira) {
+  if (!keys || keys.length === 0 || !jiraConfig || !jiraConfig.email || !jiraConfig.token) return [];
 
-  const jiraHost = config.jira.host;
-  const email = config.jira.email;
-  const token = config.jira.token;
+  const jiraHost = jiraConfig.host;
+  const email = jiraConfig.email;
+  const token = jiraConfig.token;
   const authHeader = `Basic ${Buffer.from(`${email}:${token}`).toString("base64")}`;
 
   const jql = `key in (${keys.map((k) => `"${k}"`).join(",")})`;

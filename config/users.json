@@ -1,0 +1,20 @@
+[
+  {
+    "id": "pradeep",
+    "name": "Pradeep M",
+    "githubUsername": "pradeep-m-pyt",
+    "jiraEmail": "pradeep.m@pickyourtrail.com",
+    "jiraApiTokenEnvVar": "JIRA_API_TOKEN_PRADEEP",
+    "slackChannel": "C02B68RQ4",
+    "enabled": true
+  },
+  {
+    "id": "kharthik",
+    "name": "Kharthik J",
+    "githubUsername": "kharthik-pyt",
+    "jiraEmail": "kharthik.j@pickyourtrail.com",
+    "jiraApiTokenEnvVar": "JIRA_API_TOKEN_KHARTHIK",
+    "slackChannel": "D0A246GG85U",
+    "enabled": true
+  }
+]

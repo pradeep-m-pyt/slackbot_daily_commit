@@ -3,10 +3,10 @@ import { fetchWithRetry } from "./http.js";
 
 const GITHUB_API = "https://api.github.com";
 
-async function githubRequest(path) {
+async function githubRequest(path, token) {
   const res = await fetchWithRetry(`${GITHUB_API}${path}`, {
     headers: {
-      Authorization: `Bearer ${config.github.token}`,
+      Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
       "User-Agent": "github-slack-digest",
@@ -21,17 +21,19 @@ async function githubRequest(path) {
   return res.json();
 }
 
-export async function fetchRecentCommits() {
-  const sinceMs = Date.now() - config.github.lookbackHours * 60 * 60 * 1000;
+export async function fetchRecentCommits(githubConfig = config.github) {
+  const lookbackHours = githubConfig.lookbackHours || 24;
+  const sinceMs = Date.now() - lookbackHours * 60 * 60 * 1000;
   const sinceIso = new Date(sinceMs).toISOString();
-  const { username } = config.github;
+  const username = githubConfig.username;
+  const token = githubConfig.token;
 
   const commitsByRepo = new Map();
   const candidateRepos = new Set();
 
   // 1. Public events
   try {
-    const events = await githubRequest(`/users/${username}/events?per_page=100`).catch(() => []);
+    const events = await githubRequest(`/users/${username}/events?per_page=100`, token).catch(() => []);
     if (Array.isArray(events)) {
       for (const event of events) {
         const eventTime = new Date(event.created_at).getTime();
@@ -41,12 +43,12 @@ export async function fetchRecentCommits() {
       }
     }
   } catch (err) {
-    console.warn(`[digest] Public events lookup warning:`, err.message);
+    console.warn(`[digest] Public events lookup warning for ${username}:`, err.message);
   }
 
   // 2. User accessible repos (includes org repos) updated recently
   try {
-    const userRepos = await githubRequest(`/user/repos?sort=updated&per_page=20`).catch(() => []);
+    const userRepos = await githubRequest(`/user/repos?sort=updated&per_page=20`, token).catch(() => []);
     if (Array.isArray(userRepos)) {
       for (const repo of userRepos) {
         const updatedAt = new Date(repo.updated_at).getTime();
@@ -56,7 +58,7 @@ export async function fetchRecentCommits() {
       }
     }
   } catch (err) {
-    console.warn(`[digest] User repos lookup warning:`, err.message);
+    console.warn(`[digest] User repos lookup warning for ${username}:`, err.message);
   }
 
   // 3. Process candidate repos
@@ -68,7 +70,7 @@ export async function fetchRecentCommits() {
       let allBranches = [];
       let page = 1;
       while (page <= 5) {
-        const branches = await githubRequest(`/repos/${repoName}/branches?per_page=100&page=${page}`).catch(() => []);
+        const branches = await githubRequest(`/repos/${repoName}/branches?per_page=100&page=${page}`, token).catch(() => []);
         if (!Array.isArray(branches) || branches.length === 0) break;
         allBranches.push(...branches);
         if (branches.length < 100) break;
@@ -85,7 +87,8 @@ export async function fetchRecentCommits() {
           chunk.map(async (branchName) => {
             const branchParam = branchName ? `&sha=${encodeURIComponent(branchName)}` : "";
             const commitsData = await githubRequest(
-              `/repos/${repoName}/commits?since=${sinceIso}${branchParam}`
+              `/repos/${repoName}/commits?since=${sinceIso}${branchParam}`,
+              token
             ).catch(() => []);
 
             if (!Array.isArray(commitsData)) return;
@@ -98,14 +101,15 @@ export async function fetchRecentCommits() {
               const authorEmail = (item.commit?.author?.email || "").toLowerCase();
               const authorName = (item.commit?.author?.name || "").toLowerCase();
               const targetUser = username.toLowerCase();
+              const userPrefix = targetUser.split("-")[0].split(".")[0]; // e.g. "kharthik" from "kharthik-pyt" or "pradeep"
 
               const isMatch =
                 authorLogin === targetUser ||
                 committerLogin === targetUser ||
                 authorEmail.includes(targetUser) ||
-                authorEmail.includes("pradeep") ||
+                (userPrefix && authorEmail.includes(userPrefix)) ||
                 authorName.includes(targetUser) ||
-                authorName.includes("pradeep");
+                (userPrefix && authorName.includes(userPrefix));
 
               if (isMatch && sha) {
                 const message = item.commit?.message?.split("\n")[0]?.trim() || "No commit message";
@@ -136,7 +140,7 @@ export async function fetchRecentCommits() {
         commitsByRepo.set(repoName, sortedCommits);
       }
     } catch (err) {
-      console.error(`[digest] Failed to fetch commits for ${repoName}:`, err.message);
+      console.error(`[digest] Failed to fetch commits for ${repoName} (${username}):`, err.message);
     }
   }
 
