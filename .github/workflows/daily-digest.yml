@@ -2,8 +2,8 @@ name: Daily Commit Digest
 
 on:
   schedule:
-    # 08:08 IST = 02:38 UTC. Avoid peak times (00 and 30) for better reliability.
-    - cron: "38 2 * * *"
+    # 10:30 AM IST = 05:00 UTC. Runs Monday through Friday (excludes Saturday & Sunday).
+    - cron: "0 5 * * 1-5"
   workflow_dispatch: {} # Trigger manually from Actions tab to test
 
 jobs:
