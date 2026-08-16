@@ -31,7 +31,7 @@ export async function fetchRecentCommits(githubConfig = config.github) {
   const commitsByRepo = new Map();
   const candidateRepos = new Set();
 
-  // 1. Public events
+  // 1. Public + private events (authenticated)
   try {
     const events = await githubRequest(`/users/${username}/events?per_page=100`, token).catch(() => []);
     if (Array.isArray(events)) {
@@ -46,16 +46,34 @@ export async function fetchRecentCommits(githubConfig = config.github) {
     console.warn(`[digest] Public events lookup warning for ${username}:`, err.message);
   }
 
-  // 2. User accessible repos (includes org repos) updated recently
+  // 2. All user-accessible repos (owner + collaborator + org member), paginated up to 3 pages
+  //    Bug #4 fix: was per_page=20 with no affiliation — missed most org repos
   try {
-    const userRepos = await githubRequest(`/user/repos?sort=updated&per_page=20`, token).catch(() => []);
-    if (Array.isArray(userRepos)) {
+    let page = 1;
+    while (page <= 3) {
+      const userRepos = await githubRequest(
+        `/user/repos?sort=updated&per_page=100&affiliation=owner,collaborator,organization_member&page=${page}`,
+        token
+      ).catch(() => []);
+      if (!Array.isArray(userRepos) || userRepos.length === 0) break;
+
+      let foundAny = false;
       for (const repo of userRepos) {
         const updatedAt = new Date(repo.updated_at).getTime();
         if (updatedAt >= sinceMs && repo.full_name) {
           candidateRepos.add(repo.full_name);
+          foundAny = true;
         }
       }
+
+      // Stop paginating if last repo on this page is older than our lookback window
+      if (!foundAny && userRepos.length > 0) {
+        const oldestOnPage = new Date(userRepos[userRepos.length - 1].updated_at).getTime();
+        if (oldestOnPage < sinceMs) break;
+      }
+
+      if (userRepos.length < 100) break;
+      page++;
     }
   } catch (err) {
     console.warn(`[digest] User repos lookup warning for ${username}:`, err.message);
@@ -87,7 +105,7 @@ export async function fetchRecentCommits(githubConfig = config.github) {
           chunk.map(async (branchName) => {
             const branchParam = branchName ? `&sha=${encodeURIComponent(branchName)}` : "";
             const commitsData = await githubRequest(
-              `/repos/${repoName}/commits?since=${sinceIso}${branchParam}`,
+              `/repos/${repoName}/commits?since=${sinceIso}&per_page=100${branchParam}`,
               token
             ).catch(() => []);
 

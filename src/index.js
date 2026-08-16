@@ -80,6 +80,7 @@ async function processUserDigest(user) {
   // 4. Format and post to Slack
   const message = formatDigest(commitsByRepo, jiraTasks, commitsByIssue, {
     lookbackHours: user.github.lookbackHours,
+    jiraConfig: user.jira, // Bug #5 fix: pass per-user jira config
   });
 
   console.log(`[digest] Posting digest for ${user.name} to Slack target ${user.slack.channel}...`);

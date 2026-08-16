@@ -4,7 +4,7 @@ on:
   schedule:
     # 08:08 IST = 02:38 UTC. Avoid peak times (00 and 30) for better reliability.
     - cron: "38 2 * * *"
-  workflow_dispatch: {} # lets you trigger it manually from the Actions tab to test
+  workflow_dispatch: {} # Trigger manually from Actions tab to test
 
 jobs:
   send-digest:
@@ -22,12 +22,12 @@ jobs:
       - name: Run digest
         run: npm start
         env:
-          GITHUB_USERNAME: ${{ secrets.DIGEST_GH_USERNAME }}
+          # ── Shared credentials ──────────────────────────────────────────────
           GITHUB_TOKEN: ${{ secrets.DIGEST_GH_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
           JIRA_HOST: ${{ secrets.JIRA_HOST }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_API_TOKEN_PRADEEP: ${{ secrets.JIRA_API_TOKEN_PRADEEP || secrets.JIRA_API_TOKEN }}
-          JIRA_API_TOKEN_KHARTHIK: ${{ secrets.JIRA_API_TOKEN_KHARTHIK }}
+
+          # ── All users' Jira tokens in one JSON map ─────────────────────────
+          # Format: {"pradeep": "ATATT3x...", "kharthik": "ATATT3x...", "ravi": "..."}
+          # To add a new person: update this ONE secret. No YAML changes needed.
+          JIRA_TOKENS_JSON: ${{ secrets.JIRA_TOKENS_JSON }}

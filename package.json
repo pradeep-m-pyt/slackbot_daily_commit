@@ -6,7 +6,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --env-file=.env src/index.js"
+    "dev": "node --env-file=.env src/index.js",
+    "dev:48h": "LOOKBACK_HOURS=48 node --env-file=.env src/index.js",
+    "setup": "node --env-file=.env setup/server.js"
   },
   "dependencies": {
     "@slack/web-api": "^7.7.0"
