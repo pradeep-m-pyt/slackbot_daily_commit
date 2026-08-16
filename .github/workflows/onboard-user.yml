@@ -1,0 +1,93 @@
+name: Onboard Team Member
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Full Name (e.g. Ravi Kumar)'
+        required: true
+        type: string
+      id:
+        description: 'User ID (lowercase, e.g. ravi)'
+        required: true
+        type: string
+      github_username:
+        description: 'GitHub Username (e.g. ravi-pyt)'
+        required: true
+        type: string
+      slack_user_id:
+        description: 'Slack User ID (starts with U, e.g. U0A1B2C3D4E)'
+        required: true
+        type: string
+      jira_email:
+        description: 'Jira Email (optional)'
+        required: false
+        type: string
+      jira_token:
+        description: 'Jira API Token (optional)'
+        required: false
+        type: string
+
+jobs:
+  onboard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Register & Encrypt User Credentials
+        env:
+          INPUT_NAME: ${{ inputs.name }}
+          INPUT_ID: ${{ inputs.id }}
+          INPUT_GH_USER: ${{ inputs.github_username }}
+          INPUT_SLACK_USER: ${{ inputs.slack_user_id }}
+          INPUT_JIRA_EMAIL: ${{ inputs.jira_email }}
+          INPUT_JIRA_TOKEN: ${{ inputs.jira_token }}
+          CREDENTIALS_KEY: ${{ secrets.CREDENTIALS_KEY }}
+        run: |
+          node -e "
+          import('./src/vault.js').then(({ saveEncryptedTokens, loadTokens }) => {
+            import('fs').then(fs => {
+              const users = JSON.parse(fs.readFileSync('config/users.json', 'utf8'));
+              const id = process.env.INPUT_ID.toLowerCase().trim();
+              const existingIdx = users.findIndex(u => u.id === id);
+              const userEntry = {
+                id,
+                name: process.env.INPUT_NAME.trim(),
+                githubUsername: process.env.INPUT_GH_USER.trim(),
+                jiraEmail: process.env.INPUT_JIRA_EMAIL ? process.env.INPUT_JIRA_EMAIL.trim() : null,
+                slackUserId: process.env.INPUT_SLACK_USER.trim(),
+                enabled: true
+              };
+              if (existingIdx >= 0) {
+                users[existingIdx] = userEntry;
+              } else {
+                users.push(userEntry);
+              }
+              fs.writeFileSync('config/users.json', JSON.stringify(users, null, 2) + '\n', 'utf8');
+
+              const tokens = loadTokens();
+              tokens[id] = {
+                githubToken: null,
+                jiraToken: process.env.INPUT_JIRA_TOKEN ? process.env.INPUT_JIRA_TOKEN.trim() : null
+              };
+              saveEncryptedTokens(tokens);
+              console.log('Successfully registered user: ' + userEntry.name);
+            });
+          });
+          "
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add config/users.json config/tokens.enc
+          git diff --staged --quiet || git commit -m "feat(user): onboard ${{ inputs.name }} via GitHub Actions"
+          git push origin main
