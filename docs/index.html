@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Digest — Setup Wizard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #07080f;
+      --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.07);
+      --border: rgba(255,255,255,0.08);
+      --border-active: rgba(139,92,246,0.5);
+      --purple: #8b5cf6;
+      --purple-light: #a78bfa;
+      --cyan: #22d3ee;
+      --green: #34d399;
+      --red: #f87171;
+      --yellow: #fbbf24;
+      --text: #f1f5f9;
+      --text-muted: #64748b;
+      --text-dim: #94a3b8;
+      --gradient: linear-gradient(135deg, #8b5cf6, #22d3ee);
+      --glow: 0 0 40px rgba(139,92,246,0.15);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background-image:
+        radial-gradient(ellipse at 20% 20%, rgba(139,92,246,0.07) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(34,211,238,0.05) 0%, transparent 50%);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 640px;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .header .logo {
+      width: 56px; height: 56px;
+      background: var(--gradient);
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      margin: 0 auto 16px;
+      box-shadow: 0 8px 32px rgba(139,92,246,0.3);
+    }
+    .header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+    .header p { color: var(--text-dim); font-size: 14px; margin-top: 6px; }
+
+    /* ── Progress Steps ── */
+    .progress {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 36px;
+    }
+    .progress-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      position: relative;
+    }
+    .progress-step::after {
+      content: '';
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      width: 100%;
+      height: 1px;
+      background: var(--border);
+      transition: background 0.3s;
+      z-index: 0;
+    }
+    .progress-step:last-child::after { display: none; }
+    .progress-step.done::after { background: var(--purple); }
+
+    .step-dot {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600;
+      transition: all 0.3s;
+      position: relative; z-index: 1;
+    }
+    .progress-step.active .step-dot {
+      background: var(--gradient);
+      border-color: transparent;
+      box-shadow: 0 0 20px rgba(139,92,246,0.5);
+    }
+    .progress-step.done .step-dot {
+      background: var(--purple);
+      border-color: transparent;
+    }
+    .progress-step.done .step-dot::after { content: '✓'; color: white; font-size: 14px; }
+    .progress-step.done .step-num { display: none; }
+    .step-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      transition: color 0.3s;
+    }
+    .progress-step.active .step-label { color: var(--purple-light); }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      box-shadow: var(--glow);
+      backdrop-filter: blur(10px);
+    }
+
+    .step-panel { display: none; }
+    .step-panel.active { display: block; }
+
+    .step-header { margin-bottom: 28px; }
+    .step-header h2 { font-size: 20px; font-weight: 700; }
+    .step-header p { color: var(--text-dim); font-size: 14px; margin-top: 6px; line-height: 1.6; }
+
+    /* ── Form Elements ── */
+    .field { margin-bottom: 20px; }
+    label {
+      display: block;
+      font-size: 13px; font-weight: 500;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      letter-spacing: 0.3px;
+    }
+    label span { color: var(--red); }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus {
+      border-color: var(--border-active);
+      box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+    }
+    input.valid { border-color: rgba(52,211,153,0.4); }
+    input.error { border-color: rgba(248,113,113,0.4); }
+    input[type="password"] { font-family: 'Fira Code', monospace; font-size: 13px; }
+
+    /* ── Validation State ── */
+    .field-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 13px;
+      min-height: 22px;
+    }
+    .field-status.success { color: var(--green); }
+    .field-status.error { color: var(--red); }
+    .field-status.loading { color: var(--text-muted); }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: var(--purple);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Instructions Accordion ── */
+    .instructions {
+      background: rgba(139,92,246,0.05);
+      border: 1px solid rgba(139,92,246,0.15);
+      border-radius: 12px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .instructions summary {
+      padding: 12px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--purple-light);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    .instructions summary::before { content: '▶'; font-size: 10px; transition: transform 0.2s; }
+    .instructions[open] summary::before { transform: rotate(90deg); }
+    .instructions summary::-webkit-details-marker { display: none; }
+    .instructions-body {
+      padding: 0 16px 16px;
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.7;
+    }
+    .instructions-body ol { padding-left: 18px; }
+    .instructions-body li { margin-bottom: 4px; }
+    .instructions-body code {
+      font-family: 'Fira Code', monospace;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--cyan);
+    }
+    .instructions-body .url {
+      color: var(--purple-light);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(167,139,250,0.3);
+    }
+
+    /* ── Validate Button ── */
+    .btn-validate {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: rgba(139,92,246,0.15);
+      border: 1px solid rgba(139,92,246,0.3);
+      border-radius: 8px;
+      color: var(--purple-light);
+      font-size: 13px; font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 4px;
+    }
+    .btn-validate:hover {
+      background: rgba(139,92,246,0.25);
+      border-color: rgba(139,92,246,0.5);
+    }
+    .btn-validate:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Navigation Buttons ── */
+    .nav-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+    .btn-back {
+      padding: 12px 24px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-dim);
+      font-size: 14px; font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-back:hover { background: var(--surface-hover); }
+    .btn-next {
+      flex: 1;
+      padding: 12px 24px;
+      background: var(--gradient);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      box-shadow: 0 4px 20px rgba(139,92,246,0.3);
+    }
+    .btn-next:hover { opacity: 0.9; }
+    .btn-next:active { transform: scale(0.98); }
+    .btn-next:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Step 1: Welcome ── */
+    .slack-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* ── Step 4: Success ── */
+    .success-icon {
+      width: 72px; height: 72px;
+      background: rgba(52,211,153,0.1);
+      border: 2px solid rgba(52,211,153,0.3);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px;
+      margin: 0 auto 24px;
+      animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    .summary-box {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: 20px 0;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 13px;
+    }
+    .summary-row + .summary-row { border-top: 1px solid var(--border); }
+    .summary-row .label { color: var(--text-muted); }
+    .summary-row .value { color: var(--text); font-weight: 500; }
+    .summary-row .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .badge-green { background: rgba(52,211,153,0.15); color: var(--green); }
+    .badge-yellow { background: rgba(251,191,36,0.15); color: var(--yellow); }
+
+    .admin-note {
+      background: rgba(251,191,36,0.06);
+      border: 1px solid rgba(251,191,36,0.2);
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.7;
+    }
+    .admin-note strong { color: var(--yellow); }
+    .admin-note code {
+      font-family: 'Fira Code', monospace;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--cyan);
+    }
+
+    .test-slack-btn {
+      width: 100%;
+      padding: 14px;
+      background: rgba(34,211,238,0.1);
+      border: 1px solid rgba(34,211,238,0.25);
+      border-radius: 10px;
+      color: var(--cyan);
+      font-size: 14px; font-weight: 600;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .test-slack-btn:hover { background: rgba(34,211,238,0.18); }
+
+    /* ── Transitions ── */
+    .step-panel { animation: fadeUp 0.3s ease; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Optional badge ── */
+    .optional { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 6px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">📋</div>
+    <h1>Daily Digest Setup</h1>
+    <p>Get your daily GitHub commits &amp; Jira tasks delivered to Slack every morning</p>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress" id="progress">
+    <div class="progress-step active" data-step="1">
+      <div class="step-dot"><span class="step-num">1</span></div>
+      <div class="step-label">Profile</div>
+    </div>
+    <div class="progress-step" data-step="2">
+      <div class="step-dot"><span class="step-num">2</span></div>
+      <div class="step-label">GitHub</div>
+    </div>
+    <div class="progress-step" data-step="3">
+      <div class="step-dot"><span class="step-num">3</span></div>
+      <div class="step-label">Jira</div>
+    </div>
+    <div class="progress-step" data-step="4">
+      <div class="step-dot"><span class="step-num">4</span></div>
+      <div class="step-label">Done</div>
+    </div>
+  </div>
+
+  <!-- Card -->
+  <div class="card">
+
+    <!-- ── Step 1: Profile ── -->
+    <div class="step-panel active" id="panel-1">
+      <div class="step-header">
+        <h2>👋 Tell us about yourself</h2>
+        <p>We'll use this to personalise your daily digest and find you on Slack.</p>
+      </div>
+
+      <div class="field">
+        <label for="name">Full Name <span>*</span></label>
+        <input type="text" id="name" placeholder="e.g. Ravi Kumar" autocomplete="name" />
+      </div>
+
+      <div class="field">
+        <label for="id">User ID <span>*</span> <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(lowercase, no spaces — used internally)</span></label>
+        <input type="text" id="id" placeholder="e.g. ravi" autocomplete="off" />
+      </div>
+
+      <details class="instructions">
+        <summary>📱 How to find your Slack User ID?</summary>
+        <div class="instructions-body">
+          <ol>
+            <li>Open <strong>Slack</strong> on desktop or web</li>
+            <li>Click your <strong>profile photo</strong> (top right)</li>
+            <li>Click <strong>"Profile"</strong></li>
+            <li>Click the <strong>⋯ (More options)</strong> button</li>
+            <li>Click <strong>"Copy member ID"</strong></li>
+            <li>It starts with <code>U</code> — paste it below</li>
+          </ol>
+        </div>
+      </details>
+
+      <div class="field">
+        <label for="slackUserId">Slack User ID <span>*</span></label>
+        <input type="text" id="slackUserId" placeholder="e.g. U0A1B2C3D4E" autocomplete="off" />
+        <div class="slack-hint">Starts with <code style="font-family: Fira Code, monospace; font-size: 11px; color: var(--cyan);">U</code> — not the channel ID</div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn-next" onclick="goToStep(2)">Continue → GitHub</button>
+      </div>
+    </div>
+
+    <!-- ── Step 2: GitHub ── -->
+    <div class="step-panel" id="panel-2">
+      <div class="step-header">
+        <h2>🐙 Connect GitHub</h2>
+        <p>Your commits are fetched using a Personal Access Token. It needs <strong>read access</strong> to your repos.</p>
+      </div>
+
+      <div class="field">
+        <label for="githubUsername">GitHub Username <span>*</span></label>
+        <input type="text" id="githubUsername" placeholder="e.g. ravi-pyt" autocomplete="off" />
+      </div>
+
+      <details class="instructions">
+        <summary>🔑 How to create a GitHub Personal Access Token?</summary>
+        <div class="instructions-body">
+          <ol>
+            <li>Go to <a href="https://github.com/settings/tokens" target="_blank" class="url">github.com/settings/tokens</a></li>
+            <li>Click <strong>"Generate new token (classic)"</strong></li>
+            <li>Set a name: <code>Daily Digest Bot</code></li>
+            <li>Set expiration: <code>1 year</code></li>
+            <li>Select scope: ✅ <code>repo</code> (full control of private repos)</li>
+            <li>Click <strong>"Generate token"</strong> at the bottom</li>
+            <li>Copy the token (starts with <code>ghp_</code>) and paste below</li>
+          </ol>
+          <p style="margin-top: 10px; color: var(--yellow);">⚠️ Copy the token immediately — GitHub only shows it once.</p>
+        </div>
+      </details>
+
+      <div class="field">
+        <label for="githubToken">Personal Access Token <span>*</span></label>
+        <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
+        <button class="btn-validate" id="btn-validate-gh" onclick="validateGitHub()">🔍 Validate Token</button>
+        <div class="field-status" id="status-gh"></div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn-back" onclick="goToStep(1)">← Back</button>
+        <button class="btn-next" id="btn-next-2" onclick="goToStep(3)" disabled>Continue → Jira</button>
+      </div>
+    </div>
+
+    <!-- ── Step 3: Jira ── -->
+    <div class="step-panel" id="panel-3">
+      <div class="step-header">
+        <h2>🎯 Connect Jira <span class="optional">optional</span></h2>
+        <p>Shows your completed and pending Jira tasks alongside commits. Skip if you don't use Jira.</p>
+      </div>
+
+      <details class="instructions">
+        <summary>🔑 How to create a Jira API Token?</summary>
+        <div class="instructions-body">
+          <ol>
+            <li>Go to <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" class="url">id.atlassian.net → Security → API Tokens</a></li>
+            <li>Click <strong>"Create API token"</strong></li>
+            <li>Label: <code>Daily Digest Bot</code></li>
+            <li>Click <strong>"Create"</strong></li>
+            <li>Copy the token and paste below</li>
+          </ol>
+        </div>
+      </details>
+
+      <div class="field">
+        <label for="jiraEmail">Jira Email Address</label>
+        <input type="email" id="jiraEmail" placeholder="you@yourcompany.com" autocomplete="email" />
+      </div>
+
+      <div class="field">
+        <label for="jiraToken">Jira API Token</label>
+        <input type="password" id="jiraToken" placeholder="ATATT3xFfGF0xxxx..." autocomplete="off" />
+        <button class="btn-validate" id="btn-validate-jira" onclick="validateJira()">🔍 Validate Token</button>
+        <div class="field-status" id="status-jira"></div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn-back" onclick="goToStep(2)">← Back</button>
+        <button class="btn-next" onclick="saveAndFinish()">Save & Finish ✓</button>
+      </div>
+    </div>
+
+    <!-- ── Step 4: Done ── -->
+    <div class="step-panel" id="panel-4">
+      <div style="text-align: center;">
+        <div class="success-icon">✅</div>
+        <h2 style="font-size: 22px;">You're all set!</h2>
+        <p style="color: var(--text-dim); margin-top: 8px; font-size: 14px;">Your credentials have been saved. Here's a summary:</p>
+      </div>
+
+      <div class="summary-box" id="summary-box"></div>
+
+      <button class="test-slack-btn" onclick="sendTestMessage()">
+        <span id="test-btn-text">📨 Send me a test Slack message</span>
+      </button>
+      <div class="field-status" id="status-slack" style="margin-top: 10px; justify-content: center;"></div>
+
+      <div class="admin-note" style="margin-top: 24px;">
+        <strong>⚙️ Admin: One last step</strong><br/>
+        Update the <code>JIRA_TOKENS_JSON</code> GitHub Secret to include this person's Jira token:<br/><br/>
+        <code id="tokens-json-hint" style="display:block; word-break: break-all; margin-top:8px;"></code>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let currentStep = 1;
+  const state = {
+    name: '', id: '', slackUserId: '',
+    githubUsername: '', githubToken: '',
+    jiraEmail: '', jiraToken: '',
+    githubValid: false, jiraValid: false, jiraSkipped: false
+  };
+
+  function goToStep(step) {
+    // Validate before advancing
+    if (step === 2 && currentStep === 1) {
+      if (!v('name') || !v('id') || !v('slackUserId')) {
+        highlight(['name','id','slackUserId']); return;
+      }
+      state.name = v('name');
+      state.id = v('id').toLowerCase().replace(/\s+/g, '-');
+      state.slackUserId = v('slackUserId');
+    }
+    if (step === 3 && currentStep === 2 && !state.githubValid) {
+      setStatus('status-gh', 'error', 'Please validate your GitHub token before continuing.');
+      return;
+    }
+
+    document.getElementById(`panel-${currentStep}`).classList.remove('active');
+    document.getElementById(`panel-${step}`).classList.add('active');
+
+    // Update progress dots
+    document.querySelectorAll('.progress-step').forEach(el => {
+      const s = parseInt(el.dataset.step);
+      el.classList.remove('active', 'done');
+      if (s < step) el.classList.add('done');
+      else if (s === step) el.classList.add('active');
+    });
+
+    currentStep = step;
+  }
+
+  function v(id) { return document.getElementById(id)?.value?.trim() || ''; }
+
+  function highlight(ids) {
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !el.value.trim()) {
+        el.classList.add('error');
+        setTimeout(() => el.classList.remove('error'), 2000);
+      }
+    });
+  }
+
+  function setStatus(id, type, msg) {
+    const el = document.getElementById(id);
+    el.className = `field-status ${type}`;
+    if (type === 'loading') {
+      el.innerHTML = `<div class="spinner"></div> ${msg}`;
+    } else if (type === 'success') {
+      el.innerHTML = `<span>✅</span> ${msg}`;
+    } else if (type === 'error') {
+      el.innerHTML = `<span>❌</span> ${msg}`;
+    } else {
+      el.innerHTML = '';
+    }
+  }
+
+  async function validateGitHub() {
+    const username = v('githubUsername');
+    const token = v('githubToken');
+    if (!username || !token) { highlight(['githubUsername','githubToken']); return; }
+
+    const btn = document.getElementById('btn-validate-gh');
+    btn.disabled = true;
+    setStatus('status-gh', 'loading', 'Validating with GitHub…');
+
+    try {
+      const res = await fetch('/api/validate/github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, token })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        state.githubUsername = username;
+        state.githubToken = token;
+        state.githubValid = true;
+        setStatus('status-gh', 'success', `Verified! Found GitHub user: ${data.name}`);
+        document.getElementById('githubToken').classList.add('valid');
+        document.getElementById('btn-next-2').disabled = false;
+      } else {
+        setStatus('status-gh', 'error', data.error);
+        document.getElementById('githubToken').classList.add('error');
+        setTimeout(() => document.getElementById('githubToken').classList.remove('error'), 2000);
+      }
+    } catch { setStatus('status-gh', 'error', 'Network error. Is the setup server running?'); }
+    btn.disabled = false;
+  }
+
+  async function validateJira() {
+    const email = v('jiraEmail');
+    const token = v('jiraToken');
+    if (!email || !token) { highlight(['jiraEmail','jiraToken']); return; }
+
+    const btn = document.getElementById('btn-validate-jira');
+    btn.disabled = true;
+    setStatus('status-jira', 'loading', 'Validating with Jira…');
+
+    try {
+      const res = await fetch('/api/validate/jira', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, token })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        state.jiraEmail = email;
+        state.jiraToken = token;
+        state.jiraValid = true;
+        setStatus('status-jira', 'success', `Verified! Logged in as: ${data.displayName}`);
+        document.getElementById('jiraToken').classList.add('valid');
+      } else {
+        setStatus('status-jira', 'error', data.error);
+      }
+    } catch { setStatus('status-jira', 'error', 'Network error.'); }
+    btn.disabled = false;
+  }
+
+  async function saveAndFinish() {
+    const jiraEmail = v('jiraEmail');
+    const jiraToken = v('jiraToken');
+
+    // If Jira fields are filled but not validated, warn
+    if ((jiraEmail || jiraToken) && !state.jiraValid) {
+      setStatus('status-jira', 'error', 'Please validate your Jira token, or clear both fields to skip.');
+      return;
+    }
+
+    state.jiraEmail = jiraEmail;
+    state.jiraToken = jiraToken;
+    state.jiraSkipped = !jiraEmail && !jiraToken;
+
+    try {
+      const res = await fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: state.id,
+          name: state.name,
+          githubUsername: state.githubUsername,
+          githubToken: state.githubToken,
+          jiraEmail: state.jiraEmail || null,
+          jiraToken: state.jiraToken || null,
+          slackUserId: state.slackUserId,
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) { alert('Save error: ' + data.error); return; }
+    } catch { alert('Network error while saving.'); return; }
+
+    // Populate summary
+    document.getElementById('summary-box').innerHTML = `
+      <div class="summary-row">
+        <span class="label">Name</span>
+        <span class="value">${state.name}</span>
+      </div>
+      <div class="summary-row">
+        <span class="label">GitHub</span>
+        <span class="value">${state.githubUsername} <span class="badge badge-green">✓ Verified</span></span>
+      </div>
+      <div class="summary-row">
+        <span class="label">Jira</span>
+        <span class="value">${state.jiraSkipped
+          ? '<span class="badge badge-yellow">Skipped</span>'
+          : `${state.jiraEmail} <span class="badge badge-green">✓ Verified</span>`}</span>
+      </div>
+      <div class="summary-row">
+        <span class="label">Slack User ID</span>
+        <span class="value" style="font-family: Fira Code, monospace; font-size: 13px;">${state.slackUserId}</span>
+      </div>
+    `;
+
+    // Admin JSON hint
+    const hint = state.jiraToken
+      ? `{ ..., "${state.id}": "${state.jiraToken.substring(0, 12)}..." }`
+      : `No Jira token — no update needed`;
+    document.getElementById('tokens-json-hint').textContent = hint;
+
+    goToStep(4);
+  }
+
+  async function sendTestMessage() {
+    const btn = document.getElementById('test-btn-text');
+    btn.textContent = 'Sending…';
+    setStatus('status-slack', 'loading', 'Opening DM and sending message…');
+
+    try {
+      const res = await fetch('/api/send-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slackUserId: state.slackUserId, name: state.name })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setStatus('status-slack', 'success', 'Message sent! Check your Slack DMs from @aiagent.');
+        btn.textContent = '✅ Message sent!';
+      } else {
+        setStatus('status-slack', 'error', data.error);
+        btn.textContent = '📨 Retry';
+      }
+    } catch {
+      setStatus('status-slack', 'error', 'Network error.');
+      btn.textContent = '📨 Retry';
+    }
+  }
+</script>
+</body>
+</html>
