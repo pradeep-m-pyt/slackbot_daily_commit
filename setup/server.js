@@ -1,26 +1,31 @@
 /**
- * Daily Digest — Onboarding Setup Wizard Server
+ * Daily Digest — Onboarding Setup Wizard Server (Fully Automated)
  * Run: npm run setup
  * Opens: http://localhost:3001
  *
  * This server handles:
  *  - Serving the wizard UI
  *  - Live validation of GitHub and Jira credentials
- *  - Writing new users to config/users.json and config/tokens.json
+ *  - Writing new users to config/users.json
+ *  - Encrypting tokens into config/tokens.enc
+ *  - Automatically committing & pushing changes to GitHub main
  *  - Sending a test Slack DM to verify delivery
  */
 
 import http from "http";
 import fs from "fs";
 import path from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { fileURLToPath } from "url";
+import { saveEncryptedTokens, loadTokens } from "../src/vault.js";
 
+const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PORT = 3001;
 
 const USERS_JSON = path.join(ROOT, "config", "users.json");
-const TOKENS_JSON = path.join(ROOT, "config", "tokens.json");
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -121,7 +126,7 @@ async function saveUser(body) {
     return { ok: false, error: "Missing required fields: id, name, githubUsername, slackUserId." };
   }
 
-  // Update users.json (non-sensitive profile data)
+  // 1. Update users.json (profile data)
   const users = readJSON(USERS_JSON, []);
   const existingIdx = users.findIndex((u) => u.id === id);
   const userEntry = {
@@ -140,42 +145,38 @@ async function saveUser(body) {
   }
   writeJSON(USERS_JSON, users);
 
-  // Update tokens.json (sensitive — gitignored)
-  const tokens = readJSON(TOKENS_JSON, {});
-  tokens[id] = {
+  // 2. Encrypt and save tokens
+  const existingTokens = loadTokens();
+  existingTokens[id] = {
     githubToken: githubToken || null,
     jiraToken: jiraToken || null,
   };
-  writeJSON(TOKENS_JSON, tokens);
+  saveEncryptedTokens(existingTokens);
 
-  return { ok: true };
+  // 3. Auto-commit & push to GitHub
+  let gitPushed = false;
+  let gitError = null;
+  try {
+    await execAsync(`git add config/users.json config/tokens.enc`, { cwd: ROOT });
+    await execAsync(`git commit -m "feat(user): automatically onboard ${name} (${id})"`, { cwd: ROOT });
+    await execAsync(`git push origin main`, { cwd: ROOT });
+    gitPushed = true;
+  } catch (err) {
+    // If nothing changed or push failed, record error
+    gitError = err.message;
+  }
+
+  return { ok: true, pushed: gitPushed, gitError };
 }
 
 async function sendTestSlack(body) {
   const { slackUserId, name } = body;
   const botToken = process.env.SLACK_BOT_TOKEN;
 
-  if (!botToken) return { ok: false, error: "SLACK_BOT_TOKEN not set. Start server with: npm run setup" };
+  if (!botToken) return { ok: false, error: "SLACK_BOT_TOKEN not set." };
   if (!slackUserId) return { ok: false, error: "Slack User ID is required." };
 
   try {
-    // Try to open DM (requires im:write scope)
-    const dmRes = await fetch("https://slack.com/api/conversations.open", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${botToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ users: slackUserId }),
-    });
-
-    const dmData = await dmRes.json();
-    let channelId = slackUserId;
-
-    if (dmData.ok && dmData.channel?.id) {
-      channelId = dmData.channel.id;
-    }
-
     const postRes = await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
       headers: {
@@ -183,14 +184,14 @@ async function sendTestSlack(body) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        channel: channelId,
-        text: `👋 Hi *${name}*! You've been successfully set up for Daily Digest. You'll receive your first digest tomorrow at 8:08 AM IST. 🚀`,
+        channel: slackUserId,
+        text: `👋 Hi *${name}*! You've been successfully set up for Daily Digest. You'll receive your first digest at 10:30 AM IST. 🚀`,
         blocks: [
           {
             type: "section",
             text: {
               type: "mrkdwn",
-              text: `👋 Hi *${name}*! You've been successfully set up for *Daily Digest*.\n\nYou'll receive your first digest tomorrow at *8:08 AM IST* with your:\n• 💻 GitHub commits from the last 24h\n• ✅ Completed Jira tasks\n• ⏳ Pending Jira tasks`,
+              text: `👋 Hi *${name}*! You've been successfully set up for *Daily Digest*.\n\nYou'll receive your digest every weekday at *10:30 AM IST* with your:\n• 💻 GitHub commits\n• ✅ Completed Jira tasks\n• ⏳ Pending Jira tasks`,
             },
           },
           { type: "divider" },
@@ -204,7 +205,7 @@ async function sendTestSlack(body) {
 
     const postData = await postRes.json();
     if (!postData.ok) {
-      return { ok: false, error: `Slack error: ${postData.error}. Bot may need 'im:write' scope added in api.slack.com/apps.` };
+      return { ok: false, error: `Slack error: ${postData.error}.` };
     }
 
     return { ok: true };
@@ -260,14 +261,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log("\n╔═════════════════════════════════════════════╗");
-  console.log("║     Daily Digest — Onboarding Wizard        ║");
-  console.log("╠═════════════════════════════════════════════╣");
-  console.log(`║  Open: http://localhost:${PORT}                 ║`);
-  console.log("║  Share this link with new team members      ║");
-  console.log("╚═════════════════════════════════════════════╝\n");
-
-  // Auto-open browser
-  const open = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  import("child_process").then(({ exec }) => exec(`${open} http://localhost:${PORT}`));
+  console.log("\n╔═════════════════════════════════════════════════════════════╗");
+  console.log("║     Daily Digest — Automated Onboarding Wizard Ready!       ║");
+  console.log("╠═════════════════════════════════════════════════════════════╣");
+  console.log(`║  Open: http://localhost:${PORT}                                 ║`);
+  console.log("║  Users onboarded here are automatically encrypted & pushed  ║");
+  console.log("╚═════════════════════════════════════════════════════════════╝\n");
 });

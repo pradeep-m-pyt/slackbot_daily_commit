@@ -27,7 +27,8 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           JIRA_HOST: ${{ secrets.JIRA_HOST }}
 
-          # ── All users' Jira tokens in one JSON map ─────────────────────────
-          # Format: {"pradeep": "ATATT3x...", "kharthik": "ATATT3x...", "ravi": "..."}
-          # To add a new person: update this ONE secret. No YAML changes needed.
+          # ── Auto-vault decryption key ───────────────────────────────────────
+          CREDENTIALS_KEY: ${{ secrets.CREDENTIALS_KEY }}
+
+          # ── Fallback JSON map ──────────────────────────────────────────────
           JIRA_TOKENS_JSON: ${{ secrets.JIRA_TOKENS_JSON }}

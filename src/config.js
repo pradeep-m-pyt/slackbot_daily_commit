@@ -1,9 +1,8 @@
 import fs from "fs";
 import path from "path";
+import { loadTokens } from "./vault.js";
 
-// ─── JIRA_TOKENS_JSON: single consolidated secret for all users (Phase 3) ───
-// Format: '{"pradeep": "ATATT3x...", "kharthik": "ATATT3x...", "ravi": "..."}'
-// Falls back to per-user env vars (JIRA_API_TOKEN_{ID}) then to JIRA_API_TOKEN
+// ─── Token resolution: JIRA_TOKENS_JSON > Vault (tokens.enc / tokens.json) > Env vars ───
 let jiraTokensMap = {};
 if (process.env.JIRA_TOKENS_JSON) {
   try {
@@ -13,16 +12,8 @@ if (process.env.JIRA_TOKENS_JSON) {
   }
 }
 
-// ─── Local tokens.json (for local dev — gitignored, populated by setup wizard) ───
-const tokensJsonPath = path.resolve(process.cwd(), "config/tokens.json");
-let localTokens = {};
-if (fs.existsSync(tokensJsonPath)) {
-  try {
-    localTokens = JSON.parse(fs.readFileSync(tokensJsonPath, "utf8"));
-  } catch (err) {
-    console.warn("[config] Warning: config/tokens.json is not valid JSON:", err.message);
-  }
-}
+// Load encrypted vault tokens
+const vaultTokens = loadTokens();
 
 function required(name) {
   const value = process.env[name];
@@ -50,7 +41,7 @@ const lookbackHours = Number(process.env.LOOKBACK_HOURS || 24);
 function resolveJiraToken(user) {
   return (
     jiraTokensMap[user.id] ||
-    localTokens[user.id]?.jiraToken ||
+    vaultTokens[user.id]?.jiraToken ||
     (user.jiraApiTokenEnvVar ? process.env[user.jiraApiTokenEnvVar] : null) ||
     process.env.JIRA_API_TOKEN ||
     null
@@ -63,7 +54,7 @@ function resolveJiraToken(user) {
  */
 function resolveGithubToken(user) {
   return (
-    localTokens[user.id]?.githubToken ||
+    vaultTokens[user.id]?.githubToken ||
     (user.githubTokenEnvVar ? process.env[user.githubTokenEnvVar] : null) ||
     globalGithubToken
   );
