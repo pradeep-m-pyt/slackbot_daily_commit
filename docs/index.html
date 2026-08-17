@@ -362,20 +362,21 @@
       color: var(--cyan);
     }
 
-    .test-slack-btn {
+    .github-action-btn {
       width: 100%;
       padding: 14px;
-      background: rgba(34,211,238,0.1);
-      border: 1px solid rgba(34,211,238,0.25);
+      background: var(--gradient);
+      border: none;
       border-radius: 10px;
-      color: var(--cyan);
+      color: white;
       font-size: 14px; font-weight: 600;
       cursor: pointer;
       margin-top: 16px;
       transition: all 0.2s;
       display: flex; align-items: center; justify-content: center; gap: 8px;
+      text-decoration: none;
     }
-    .test-slack-btn:hover { background: rgba(34,211,238,0.18); }
+    .github-action-btn:hover { opacity: 0.9; }
 
     /* ── Transitions ── */
     .step-panel { animation: fadeUp 0.3s ease; }
@@ -429,12 +430,12 @@
 
       <div class="field">
         <label for="name">Full Name <span>*</span></label>
-        <input type="text" id="name" placeholder="e.g. Ravi Kumar" autocomplete="name" />
+        <input type="text" id="name" placeholder="e.g. Jayakanth" autocomplete="name" />
       </div>
 
       <div class="field">
-        <label for="id">User ID <span>*</span> <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(lowercase, no spaces — used internally)</span></label>
-        <input type="text" id="id" placeholder="e.g. ravi" autocomplete="off" />
+        <label for="id">User ID <span>*</span> <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(lowercase, no spaces)</span></label>
+        <input type="text" id="id" placeholder="e.g. jayakanth" autocomplete="off" />
       </div>
 
       <details class="instructions">
@@ -471,10 +472,10 @@
 
       <div class="field">
         <label for="githubUsername">GitHub Username <span>*</span></label>
-        <input type="text" id="githubUsername" placeholder="e.g. ravi-pyt" autocomplete="off" />
+        <input type="text" id="githubUsername" placeholder="e.g. jayakanth-pyt" autocomplete="off" />
       </div>
 
-      <details class="instructions">
+      <details class="instructions" open>
         <summary>🔑 How to create a GitHub Personal Access Token?</summary>
         <div class="instructions-body">
           <ol>
@@ -484,7 +485,7 @@
             <li>Set expiration: <code>1 year</code></li>
             <li>Select scope: ✅ <code>repo</code> (full control of private repos)</li>
             <li>Click <strong>"Generate token"</strong> at the bottom</li>
-            <li>Copy the token (starts with <code>ghp_</code>) and paste below</li>
+            <li>Copy the token (starts with <code>ghp_</code> or <code>github_pat_</code>) and paste below</li>
           </ol>
           <p style="margin-top: 10px; color: var(--yellow);">⚠️ Copy the token immediately — GitHub only shows it once.</p>
         </div>
@@ -525,13 +526,13 @@
 
       <div class="field">
         <label for="jiraEmail">Jira Email Address</label>
-        <input type="email" id="jiraEmail" placeholder="you@yourcompany.com" autocomplete="email" />
+        <input type="email" id="jiraEmail" placeholder="you@pickyourtrail.com" autocomplete="email" />
       </div>
 
       <div class="field">
         <label for="jiraToken">Jira API Token</label>
         <input type="password" id="jiraToken" placeholder="ATATT3xFfGF0xxxx..." autocomplete="off" />
-        <button class="btn-validate" id="btn-validate-jira" onclick="validateJira()">🔍 Validate Token</button>
+        <button class="btn-validate" id="btn-validate-jira" onclick="validateJira()">🔍 Check Token Format</button>
         <div class="field-status" id="status-jira"></div>
       </div>
 
@@ -545,22 +546,13 @@
     <div class="step-panel" id="panel-4">
       <div style="text-align: center;">
         <div class="success-icon">✅</div>
-        <h2 style="font-size: 22px;">You're all set!</h2>
-        <p style="color: var(--text-dim); margin-top: 8px; font-size: 14px;">Your credentials have been saved. Here's a summary:</p>
+        <h2 style="font-size: 22px;">Setup Ready!</h2>
+        <p style="color: var(--text-dim); margin-top: 8px; font-size: 14px;">Your user configuration summary:</p>
       </div>
 
       <div class="summary-box" id="summary-box"></div>
 
-      <button class="test-slack-btn" onclick="sendTestMessage()">
-        <span id="test-btn-text">📨 Send me a test Slack message</span>
-      </button>
-      <div class="field-status" id="status-slack" style="margin-top: 10px; justify-content: center;"></div>
-
-      <div class="admin-note" style="margin-top: 24px;">
-        <strong>⚙️ Admin: One last step</strong><br/>
-        Update the <code>JIRA_TOKENS_JSON</code> GitHub Secret to include this person's Jira token:<br/><br/>
-        <code id="tokens-json-hint" style="display:block; word-break: break-all; margin-top:8px;"></code>
-      </div>
+      <div id="action-container"></div>
     </div>
 
   </div>
@@ -568,6 +560,8 @@
 
 <script>
   let currentStep = 1;
+  const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  
   const state = {
     name: '', id: '', slackUserId: '',
     githubUsername: '', githubToken: '',
@@ -576,7 +570,6 @@
   };
 
   function goToStep(step) {
-    // Validate before advancing
     if (step === 2 && currentStep === 1) {
       if (!v('name') || !v('id') || !v('slackUserId')) {
         highlight(['name','id','slackUserId']); return;
@@ -593,7 +586,6 @@
     document.getElementById(`panel-${currentStep}`).classList.remove('active');
     document.getElementById(`panel-${step}`).classList.add('active');
 
-    // Update progress dots
     document.querySelectorAll('.progress-step').forEach(el => {
       const s = parseInt(el.dataset.step);
       el.classList.remove('active', 'done');
@@ -637,29 +629,43 @@
 
     const btn = document.getElementById('btn-validate-gh');
     btn.disabled = true;
-    setStatus('status-gh', 'loading', 'Validating with GitHub…');
+    setStatus('status-gh', 'loading', 'Validating directly with GitHub API…');
 
     try {
-      const res = await fetch('/api/validate/github', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, token })
+      // Direct call to GitHub API (CORS enabled by GitHub)
+      const res = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json'
+        }
       });
-      const data = await res.json();
 
-      if (data.ok) {
-        state.githubUsername = username;
-        state.githubToken = token;
-        state.githubValid = true;
-        setStatus('status-gh', 'success', `Verified! Found GitHub user: ${data.name}`);
-        document.getElementById('githubToken').classList.add('valid');
-        document.getElementById('btn-next-2').disabled = false;
-      } else {
-        setStatus('status-gh', 'error', data.error);
-        document.getElementById('githubToken').classList.add('error');
-        setTimeout(() => document.getElementById('githubToken').classList.remove('error'), 2000);
+      if (res.status === 401) {
+        setStatus('status-gh', 'error', 'Invalid token. Please check your Personal Access Token.');
+        btn.disabled = false;
+        return;
       }
-    } catch { setStatus('status-gh', 'error', 'Network error. Is the setup server running?'); }
+      if (res.status === 404) {
+        setStatus('status-gh', 'error', `GitHub username "${username}" not found.`);
+        btn.disabled = false;
+        return;
+      }
+      if (!res.ok) {
+        setStatus('status-gh', 'error', `GitHub API returned error: ${res.status}`);
+        btn.disabled = false;
+        return;
+      }
+
+      const data = await res.json();
+      state.githubUsername = username;
+      state.githubToken = token;
+      state.githubValid = true;
+      setStatus('status-gh', 'success', `Verified! Found GitHub user: ${data.name || username}`);
+      document.getElementById('githubToken').classList.add('valid');
+      document.getElementById('btn-next-2').disabled = false;
+    } catch (err) {
+      setStatus('status-gh', 'error', `Network error: ${err.message}`);
+    }
     btn.disabled = false;
   }
 
@@ -668,62 +674,46 @@
     const token = v('jiraToken');
     if (!email || !token) { highlight(['jiraEmail','jiraToken']); return; }
 
-    const btn = document.getElementById('btn-validate-jira');
-    btn.disabled = true;
-    setStatus('status-jira', 'loading', 'Validating with Jira…');
-
-    try {
-      const res = await fetch('/api/validate/jira', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, token })
-      });
-      const data = await res.json();
-
-      if (data.ok) {
-        state.jiraEmail = email;
-        state.jiraToken = token;
-        state.jiraValid = true;
-        setStatus('status-jira', 'success', `Verified! Logged in as: ${data.displayName}`);
-        document.getElementById('jiraToken').classList.add('valid');
-      } else {
-        setStatus('status-jira', 'error', data.error);
-      }
-    } catch { setStatus('status-jira', 'error', 'Network error.'); }
-    btn.disabled = false;
+    if (token.startsWith('ATATT') || token.length > 20) {
+      state.jiraEmail = email;
+      state.jiraToken = token;
+      state.jiraValid = true;
+      setStatus('status-jira', 'success', `Token format verified! (${email})`);
+      document.getElementById('jiraToken').classList.add('valid');
+    } else {
+      setStatus('status-jira', 'error', 'Please enter a valid Jira API token (starts with ATATT3x...)');
+    }
   }
 
   async function saveAndFinish() {
     const jiraEmail = v('jiraEmail');
     const jiraToken = v('jiraToken');
 
-    // If Jira fields are filled but not validated, warn
-    if ((jiraEmail || jiraToken) && !state.jiraValid) {
-      setStatus('status-jira', 'error', 'Please validate your Jira token, or clear both fields to skip.');
-      return;
-    }
-
     state.jiraEmail = jiraEmail;
     state.jiraToken = jiraToken;
     state.jiraSkipped = !jiraEmail && !jiraToken;
 
-    try {
-      const res = await fetch('/api/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: state.id,
-          name: state.name,
-          githubUsername: state.githubUsername,
-          githubToken: state.githubToken,
-          jiraEmail: state.jiraEmail || null,
-          jiraToken: state.jiraToken || null,
-          slackUserId: state.slackUserId,
-        })
-      });
-      const data = await res.json();
-      if (!data.ok) { alert('Save error: ' + data.error); return; }
-    } catch { alert('Network error while saving.'); return; }
+    if (isLocalServer) {
+      try {
+        const res = await fetch('/api/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: state.id,
+            name: state.name,
+            githubUsername: state.githubUsername,
+            githubToken: state.githubToken,
+            jiraEmail: state.jiraEmail || null,
+            jiraToken: state.jiraToken || null,
+            slackUserId: state.slackUserId,
+          })
+        });
+        const data = await res.json();
+        if (!data.ok) { alert('Save error: ' + data.error); return; }
+      } catch (e) {
+        console.warn('Local save skipped:', e);
+      }
+    }
 
     // Populate summary
     document.getElementById('summary-box').innerHTML = `
@@ -739,7 +729,7 @@
         <span class="label">Jira</span>
         <span class="value">${state.jiraSkipped
           ? '<span class="badge badge-yellow">Skipped</span>'
-          : `${state.jiraEmail} <span class="badge badge-green">✓ Verified</span>`}</span>
+          : `${state.jiraEmail} <span class="badge badge-green">✓ Format Verified</span>`}</span>
       </div>
       <div class="summary-row">
         <span class="label">Slack User ID</span>
@@ -747,38 +737,20 @@
       </div>
     `;
 
-    // Admin JSON hint
-    const hint = state.jiraToken
-      ? `{ ..., "${state.id}": "${state.jiraToken.substring(0, 12)}..." }`
-      : `No Jira token — no update needed`;
-    document.getElementById('tokens-json-hint').textContent = hint;
+    const repoUrl = 'https://github.com/pradeep-m-pyt/slackbot_daily_commit';
+    const actionUrl = `${repoUrl}/actions/workflows/onboard-user.yml`;
+
+    document.getElementById('action-container').innerHTML = `
+      <div class="admin-note" style="margin-top: 20px;">
+        <strong>🚀 Almost done!</strong><br/>
+        Click below to complete registration in GitHub Actions:
+        <a href="${actionUrl}" target="_blank" class="github-action-btn">
+          ⚡ 1-Click Activate in GitHub Actions
+        </a>
+      </div>
+    `;
 
     goToStep(4);
-  }
-
-  async function sendTestMessage() {
-    const btn = document.getElementById('test-btn-text');
-    btn.textContent = 'Sending…';
-    setStatus('status-slack', 'loading', 'Opening DM and sending message…');
-
-    try {
-      const res = await fetch('/api/send-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slackUserId: state.slackUserId, name: state.name })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setStatus('status-slack', 'success', 'Message sent! Check your Slack DMs from @aiagent.');
-        btn.textContent = '✅ Message sent!';
-      } else {
-        setStatus('status-slack', 'error', data.error);
-        btn.textContent = '📨 Retry';
-      }
-    } catch {
-      setStatus('status-slack', 'error', 'Network error.');
-      btn.textContent = '📨 Retry';
-    }
   }
 </script>
 </body>
