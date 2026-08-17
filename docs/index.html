@@ -344,15 +344,15 @@
     .badge-yellow { background: rgba(251,191,36,0.15); color: var(--yellow); }
 
     .admin-note {
-      background: rgba(251,191,36,0.06);
-      border: 1px solid rgba(251,191,36,0.2);
+      background: rgba(52,211,153,0.06);
+      border: 1px solid rgba(52,211,153,0.2);
       border-radius: 12px;
       padding: 16px;
       font-size: 13px;
       color: var(--text-dim);
       line-height: 1.7;
     }
-    .admin-note strong { color: var(--yellow); }
+    .admin-note strong { color: var(--green); }
     .admin-note code {
       font-family: 'Fira Code', monospace;
       background: rgba(255,255,255,0.06);
@@ -538,16 +538,16 @@
 
       <div class="nav-buttons">
         <button class="btn-back" onclick="goToStep(2)">← Back</button>
-        <button class="btn-next" onclick="saveAndFinish()">Save & Finish ✓</button>
+        <button class="btn-next" id="btn-submit" onclick="saveAndFinish()">Save & Submit ✓</button>
       </div>
     </div>
 
     <!-- ── Step 4: Done ── -->
     <div class="step-panel" id="panel-4">
       <div style="text-align: center;">
-        <div class="success-icon">✅</div>
-        <h2 style="font-size: 22px;">Setup Ready!</h2>
-        <p style="color: var(--text-dim); margin-top: 8px; font-size: 14px;">Your user configuration summary:</p>
+        <div class="success-icon" id="success-icon">✅</div>
+        <h2 style="font-size: 22px;" id="success-title">Onboarding Submitted!</h2>
+        <p style="color: var(--text-dim); margin-top: 8px; font-size: 14px;" id="success-sub">Your configuration has been processed.</p>
       </div>
 
       <div class="summary-box" id="summary-box"></div>
@@ -561,6 +561,8 @@
 <script>
   let currentStep = 1;
   const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const REPO_OWNER = 'pradeep-m-pyt';
+  const REPO_NAME = 'slackbot_daily_commit';
   
   const state = {
     name: '', id: '', slackUserId: '',
@@ -632,7 +634,6 @@
     setStatus('status-gh', 'loading', 'Validating directly with GitHub API…');
 
     try {
-      // Direct call to GitHub API (CORS enabled by GitHub)
       const res = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -686,6 +687,10 @@
   }
 
   async function saveAndFinish() {
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
     const jiraEmail = v('jiraEmail');
     const jiraToken = v('jiraToken');
 
@@ -693,6 +698,9 @@
     state.jiraToken = jiraToken;
     state.jiraSkipped = !jiraEmail && !jiraToken;
 
+    let autoSuccess = false;
+
+    // Try automated submission via Local Server API or GitHub Actions Dispatch
     if (isLocalServer) {
       try {
         const res = await fetch('/api/save', {
@@ -709,9 +717,37 @@
           })
         });
         const data = await res.json();
-        if (!data.ok) { alert('Save error: ' + data.error); return; }
+        if (data.ok) autoSuccess = true;
       } catch (e) {
-        console.warn('Local save skipped:', e);
+        console.warn('Local save failed:', e);
+      }
+    } else {
+      // Direct submission via GitHub Actions workflow dispatch from browser
+      try {
+        const dispatchRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/onboard-user.yml/dispatches`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${state.githubToken}`,
+            'Accept': 'application/vnd.github+json'
+          },
+          body: JSON.stringify({
+            ref: 'main',
+            inputs: {
+              name: state.name,
+              id: state.id,
+              github_username: state.githubUsername,
+              slack_user_id: state.slackUserId,
+              jira_email: state.jiraEmail || '',
+              jira_token: state.jiraToken || ''
+            }
+          })
+        });
+
+        if (dispatchRes.status === 204 || dispatchRes.ok) {
+          autoSuccess = true;
+        }
+      } catch (e) {
+        console.warn('Direct workflow dispatch failed:', e);
       }
     }
 
@@ -722,6 +758,10 @@
         <span class="value">${state.name}</span>
       </div>
       <div class="summary-row">
+        <span class="label">User ID</span>
+        <span class="value" style="font-family: Fira Code, monospace;">${state.id}</span>
+      </div>
+      <div class="summary-row">
         <span class="label">GitHub</span>
         <span class="value">${state.githubUsername} <span class="badge badge-green">✓ Verified</span></span>
       </div>
@@ -729,7 +769,7 @@
         <span class="label">Jira</span>
         <span class="value">${state.jiraSkipped
           ? '<span class="badge badge-yellow">Skipped</span>'
-          : `${state.jiraEmail} <span class="badge badge-green">✓ Format Verified</span>`}</span>
+          : `${state.jiraEmail} <span class="badge badge-green">✓ Ready</span>`}</span>
       </div>
       <div class="summary-row">
         <span class="label">Slack User ID</span>
@@ -737,18 +777,31 @@
       </div>
     `;
 
-    const repoUrl = 'https://github.com/pradeep-m-pyt/slackbot_daily_commit';
-    const actionUrl = `${repoUrl}/actions/workflows/onboard-user.yml`;
-
-    document.getElementById('action-container').innerHTML = `
-      <div class="admin-note" style="margin-top: 20px;">
-        <strong>🚀 Almost done!</strong><br/>
-        Click below to complete registration in GitHub Actions:
-        <a href="${actionUrl}" target="_blank" class="github-action-btn">
-          ⚡ 1-Click Activate in GitHub Actions
-        </a>
-      </div>
-    `;
+    if (autoSuccess) {
+      document.getElementById('success-title').textContent = '🎉 Successfully Onboarded!';
+      document.getElementById('success-sub').textContent = 'Your credentials have been encrypted and saved directly to GitHub.';
+      document.getElementById('action-container').innerHTML = `
+        <div class="admin-note" style="margin-top: 20px;">
+          <strong>✅ All Set!</strong><br/>
+          GitHub Actions is now syncing your account.<br/>
+          Your daily digest will be delivered to Slack every weekday morning at <strong>10:30 AM IST</strong>!
+        </div>
+      `;
+    } else {
+      // Fallback: Show pre-filled GitHub Actions Dispatch link
+      const actionUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/actions/workflows/onboard-user.yml`;
+      document.getElementById('success-title').textContent = '📋 User Details Ready!';
+      document.getElementById('success-sub').textContent = 'Click below to confirm activation in GitHub Actions:';
+      document.getElementById('action-container').innerHTML = `
+        <div class="admin-note" style="margin-top: 20px;">
+          <strong>⚡ Final Step:</strong><br/>
+          Click the button below to confirm activation on GitHub:
+          <a href="${actionUrl}" target="_blank" class="github-action-btn">
+            🚀 Activate User in GitHub Actions
+          </a>
+        </div>
+      `;
+    }
 
     goToStep(4);
   }
